@@ -1,6 +1,6 @@
 import express from 'express';
-import { router as technologyController} from './technologyController';
-import {router as userController} from './userController';
+import { router as technologyController} from './controller/technologyController';
+import { router as userController } from './controller/userController';
 
 const app = express();
 

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response, Router } from "express";
-import UserRepository from "./data";
-import { Technology, User } from "./types";
+import UserRepository from "../data";
+import { Technology, User } from "../types";
 import {v4 as uuid} from "uuid";
 
 export const router = Router();

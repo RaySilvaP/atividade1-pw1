@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { User } from "./types";
-import UserRepository from "./data";
+import { User } from "../types";
+import UserRepository from "../data";
 import {v4 as uuid} from "uuid";
 export const router = Router();
 
