@@ -1,27 +1,29 @@
-import { NextFunction, Request, Response, Router } from "express";
-import UserRepository from "../data";
+import { Router } from "express";
+import { checkExistsUserAccount } from "../middlewares";
 import { Technology, User } from "../types";
 import {v4 as uuid} from "uuid";
+import PrismaTechnologyRepository from "../data/prismaTechnologyRepository";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 export const router = Router();
+const repository = new PrismaTechnologyRepository();
 
-function checkExistsUserAccount(req:Request, res:Response, next:NextFunction){
-    const {username} = req.headers;
-    const userExist = UserRepository.getUser(username as string);
-    if(userExist){
-        res.locals.user = userExist;
-        next();
-    }        
-    else
-        res.status(403).json({error: "User not found."})
-}
-
-router.get('/', checkExistsUserAccount, (request, response) => {
+router.get('/', checkExistsUserAccount, async (request, response) => {
     const user = response.locals.user as User;
-    response.json(user.technologies);
+    try{
+        const technologies = await repository.getUserTechnologies(user.id);
+        response.status(200).json(technologies);    
+    }catch(e){
+        if(e instanceof PrismaClientKnownRequestError)
+            return response.status(404).send("User not found");
+        else{
+            console.log(e);
+            response.status(500).send();
+        }
+    }
 })
 
-router.post('/', checkExistsUserAccount, (request, response) => {
+router.post('/', checkExistsUserAccount, async (request, response) => {
     const user = response.locals.user as User;
     const {title, deadline} = request.body;
     const technology:Technology = {
@@ -31,45 +33,59 @@ router.post('/', checkExistsUserAccount, (request, response) => {
         deadline: new Date(deadline),
         created_at: new Date()
     }
-    user.technologies.push(technology);
-    response.status(201).json(technology);    
+    try{
+        await repository.addUserTechnology(user.id, technology);
+        return response.status(201).json(technology);    
+    }catch(e){
+        if(e instanceof PrismaClientKnownRequestError){
+            console.log(e);
+            return response.status(400).send();
+        }
+        else{
+            console.log(e);
+            return response.status(500).send();
+        }
+    }
 })
 
-router.put('/:id', checkExistsUserAccount, (request, response) => {
-    const user = response.locals.user as User;
+router.put('/:id', async (request, response) => {
     const {title, deadline} = request.body;
-    const technology = user.technologies.find(t => t.id == request.params.id);
+    const technology = await repository.getTechnology(request.params.id);
     if(technology){
         technology.title = title;
         technology.deadline = new Date(deadline);
-        response.status(200).json(technology);
+        await repository.updateTechnology(technology);
+        response.status(200).send();
     } 
     else{
-        response.status(404).json({error: "Technology not found."})
+        response.status(404).json({error: "Technology not found."});
     }
 })
 
-router.delete('/:id', checkExistsUserAccount, (request, response) => {
+router.delete('/:id', checkExistsUserAccount, async (request, response) => {
     const user = response.locals.user as User;
-    const index = user.technologies.findIndex(t => t.id === request.params.id);
-    if(index == -1){
-        response.status(404).json({error: "Technology not found."})
-    }
-    else{
-        user.technologies.splice(index, 1);
-        response.status(200).json({remaining_technologies: user.technologies});
+    await repository.deleteTechnology(request.params.id);
+    try{
+        const technologies = await repository.getUserTechnologies(user.id);
+        return response.status(200).json({remaining_technologies: technologies});
+    }catch(e){
+        if(e instanceof PrismaClientKnownRequestError)
+            return response.status(404).send("Not found.");
+        else{
+            console.log(e);
+            return response.status(500).send(); 
+        }
     }
 })
 
-router.patch('/:id/studied', checkExistsUserAccount, (request, response) => {
-    const user = response.locals.user as User;
-    const technology = user.technologies.find(t => t.id === request.params.id);
+router.patch('/:id/studied', async (request, response) => {
+    const technology = await repository.getTechnology(request.params.id);
     if(technology){
         technology.studied = true;
-        response.status(200).json(technology);
+        await repository.updateTechnology(technology);
+        response.status(200).send();
     }
     else{
         response.status(404).json({error: "Technology not found"})
     }
 })
-
